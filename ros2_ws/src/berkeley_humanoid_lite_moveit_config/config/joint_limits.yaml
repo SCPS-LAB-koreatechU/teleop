@@ -1,0 +1,23 @@
+# The URDF declares velocity="15" rad/s for every joint, which is the actuator's
+# no-load figure rather than anything you would command. These caps are what
+# time-parameterisation actually uses, and they are deliberately conservative so
+# a trajectory planned here stays sane when it is later replayed on hardware.
+
+default_velocity_scaling_factor: 0.5
+default_acceleration_scaling_factor: 0.5
+
+joint_limits:
+  arm_left_shoulder_pitch_joint: &arm_limits
+    has_velocity_limits: true
+    max_velocity: 2.0
+    has_acceleration_limits: true
+    max_acceleration: 4.0
+  arm_left_shoulder_roll_joint: *arm_limits
+  arm_left_shoulder_yaw_joint: *arm_limits
+  arm_left_elbow_pitch_joint: *arm_limits
+  arm_left_elbow_roll_joint: *arm_limits
+  arm_right_shoulder_pitch_joint: *arm_limits
+  arm_right_shoulder_roll_joint: *arm_limits
+  arm_right_shoulder_yaw_joint: *arm_limits
+  arm_right_elbow_pitch_joint: *arm_limits
+  arm_right_elbow_roll_joint: *arm_limits

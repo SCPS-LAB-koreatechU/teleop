@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Fast DDS (ROS 2 Humble default RMW) profile for networks that do not pass UDP
+multicast between the robot and the PC (some Wi-Fi access points, VPNs, Docker
+without host networking). Discovery then goes by unicast to the peers listed
+here instead of multicast.
+
+Only needed when `ros2 multicast receive` on one machine does not see
+`ros2 multicast send` from the other. On a normal wired LAN nothing is needed.
+
+Use, on BOTH machines, each listing the OTHER one's address:
+
+    export FASTRTPS_DEFAULT_PROFILES_FILE=~/humanoid_sdk/ros2_ws/src/bhl_bringup/config/fastdds_unicast.xml
+    ros2 daemon stop            # the daemon caches the old discovery settings
+
+With only an address (no <port>), Fast DDS tries the metatraffic ports of the
+first few participants of the ROS_DOMAIN_ID in use, which covers a machine
+running a handful of ROS processes. Both sides must still share ROS_DOMAIN_ID.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="bhl_unicast_discovery" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <!-- an empty locator: listen on the default unicast port, no multicast -->
+        <metatrafficUnicastLocatorList>
+          <locator/>
+        </metatrafficUnicastLocatorList>
+        <initialPeersList>
+          <locator>
+            <udpv4>
+              <address>192.168.1.225</address>   <!-- the other machine (robot or PC) -->
+            </udpv4>
+          </locator>
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>

@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>bhl_bringup</name>
+  <version>0.1.0</version>
+  <description>Bring-up of the Berkeley Humanoid Lite upper body: the on-board launch publishes the robot's state (/joint_states, /tf, /robot_description, /diagnostics) so every other machine and node talks to the robot through that state; the remote launch is the PC side (RViz, slider panel).</description>
+  <maintainer email="jeong510@koreatech.ac.kr">SCPS Lab</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>bhl_arm_sdk</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <!-- Not declared on purpose, so `rosdep install` works without it:
+       berkeley_humanoid_lite_description (URDF + meshes), from
+       SCPS-LAB-koreatechU/Berkeley-Humanoid-Lite-origin- ros2_ws/src, see
+       ../../../humanoid.repos. Optional at run time: without it robot.launch.py
+       still drives the arms, it just cannot publish /tf. -->
+  <!-- Also only at run time, on the PC side: python3-pyqt5 through bhl_arm_sdk (slider_gui). -->
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

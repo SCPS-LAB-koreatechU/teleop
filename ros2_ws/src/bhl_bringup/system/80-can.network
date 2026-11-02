@@ -1,0 +1,19 @@
+# systemd-networkd: every CAN interface (gs_usb USB-CAN adapters, the Jetson /
+# X5 on-chip controllers) comes up at 1 Mbit/s as soon as it appears, with
+# automatic bus-off recovery. robot.launch.py does not touch the interfaces
+# itself, so this replaces the `ip link set canX up ...` step after every boot
+# and every re-plug.
+#
+#   sudo cp 80-can.network /etc/systemd/network/
+#   sudo systemctl enable --now systemd-networkd
+#   ip -details link show can0            # "state UP ... bitrate 1000000"
+#
+# networkd only manages interfaces that match a .network file, so NetworkManager
+# keeps Ethernet and Wi-Fi exactly as before.
+
+[Match]
+Name=can*
+
+[CAN]
+BitRate=1M
+RestartSec=100ms

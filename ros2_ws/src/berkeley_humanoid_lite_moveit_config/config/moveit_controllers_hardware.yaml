@@ -1,0 +1,82 @@
+# Controllers for running against real hardware.
+#
+# Differs from moveit_controllers_v1arm.yaml only in where the hands go: the
+# arms and wrist still land on /arms_controller (now served by hardware_bridge.py
+# instead of sim_trajectory_server.py, same action name), while each hand is
+# routed to a dexhand_bringup driver, which already speaks FollowJointTrajectory.
+# Selected by demo.launch.py hardware:=true for every model.
+#
+# The right hand goes straight there -- its driver already uses the same
+# R_<finger>_<Yaw|Pitch> names this URDF does. The left hand goes through
+# left_hand_adapter.py, which translates L_ names to the driver's R_ names;
+# bring it up with left_hand.launch.py. Skip that launch and MoveIt simply finds
+# no left_hand_controller and refuses left-hand goals.
+#
+# Nothing moves until each output is enabled, separately and deliberately:
+#   ros2 service call /hardware_bridge/enable    std_srvs/srv/SetBool '{data: true}'
+#   ros2 service call /dexhand_driver/enable     std_srvs/srv/SetBool '{data: true}'
+#   ros2 service call /left_hand_adapter/enable  std_srvs/srv/SetBool '{data: true}'
+
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - arms_controller
+    - hand_controller
+    - left_hand_controller
+
+  arms_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - arm_left_shoulder_pitch_joint
+      - arm_left_shoulder_roll_joint
+      - arm_left_shoulder_yaw_joint
+      - arm_left_elbow_pitch_joint
+      - arm_left_elbow_roll_joint
+      - arm_right_shoulder_pitch_joint
+      - arm_right_shoulder_roll_joint
+      - arm_right_shoulder_yaw_joint
+      - arm_right_elbow_pitch_joint
+      - arm_right_elbow_roll_joint
+      # V1 wrist -- Feetech serial servos, also served by hardware_bridge.py.
+      # Only the v1arm model has these joints; MoveIt ignores controller
+      # joints that are not in the loaded robot model.
+      - arm_left_wrist_pitch_lower_joint
+      - arm_left_wrist_yaw_joint
+      - arm_left_wrist_pitch_upper_joint
+      - arm_right_wrist_pitch_lower_joint
+      - arm_right_wrist_yaw_joint
+      - arm_right_wrist_pitch_upper_joint
+
+  # dexhand_bringup declares this action with a RELATIVE name, so it resolves to
+  # /hand_controller/follow_joint_trajectory -- not under the node name, unlike
+  # its ~/enable service which lands at /dexhand_driver/enable.
+  hand_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - R_Index_Pitch
+      - R_Middle_Pitch
+      - R_Ring_Pitch
+      - R_Pinky_Pitch
+      - R_Index_Yaw
+      - R_Middle_Yaw
+      - R_Ring_Yaw
+      - R_Pinky_Yaw
+
+  left_hand_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - L_Index_Pitch
+      - L_Middle_Pitch
+      - L_Ring_Pitch
+      - L_Pinky_Pitch
+      - L_Index_Yaw
+      - L_Middle_Yaw
+      - L_Ring_Yaw
+      - L_Pinky_Yaw

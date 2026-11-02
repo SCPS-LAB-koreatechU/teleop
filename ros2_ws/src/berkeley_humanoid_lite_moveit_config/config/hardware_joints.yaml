@@ -1,0 +1,224 @@
+# Maps MoveIt joint names onto real actuators.
+#
+# ========================= NOTHING HERE IS VERIFIED =========================
+# `direction` and `offset` are transcribed from robot/bimanual.py, which
+# describes a *different* robot: its five joints per arm are named
+# shoulder_pitch/roll/yaw, elbow and wrist_yaw, and this URDF's are
+# shoulder_pitch/roll/yaw, elbow_pitch and elbow_roll. The CAN IDs line up by
+# position in the chain; the sign conventions have NOT been checked against
+# this URDF.
+#
+# UNITS (checked 2026-08-19 on the bench, motors 1/3/5): the recoil firmware
+# on these actuators has POSITION_CONTROLLER_GEAR_RATIO = 1.0, i.e. it reports
+# and accepts ROTOR radians, while the reference robot_configuration.backup.json
+# expects -15.0 for every arm joint. Rather than reflash, `gear_ratio: 15`
+# below converts in the bridge (sign folded into `direction`, so the reference
+# directions +1/+1/-1 become -1/-1/+1 for the left shoulder). If someone writes
+# -15 back into the firmware, set gear_ratio: 1 and flip direction back.
+#
+# ZEROING: encoders boot at an arbitrary value and position_offset is 0 in the
+# firmware, so `offset` here is what maps the real arm onto URDF zero. Pose the
+# arm at zero (URDF home), output disabled, then
+#   ros2 service call /hardware_bridge/zero std_srvs/srv/Trigger
+# and paste the printed offsets below. Redo after every power cycle unless the
+# firmware offsets are stored.
+#
+# Verify one joint at a time, powered, with the arm free to move and a hand on
+# the E-STOP:
+#   1. bring the joint up with `enabled: false` still set and watch /joint_states
+#      while you back-drive it by hand -- the sign tells you `direction`
+#   2. only then set `enabled: true` and command small moves
+# ============================================================================
+#
+# `enabled: false` means the bridge will read the joint if it answers but will
+# never command it. Joints absent from this file are neither read nor commanded;
+# the bridge reports them as unavailable and refuses trajectories touching them.
+#
+# The bridge only maps joints that exist in the running robot_description, so
+# with model:=stock or model:=dexhand the wrist entries below are simply
+# skipped; with model:=v1arm they are required for any arm trajectory.
+
+bus:
+  # Two CAN channels, one per arm, as in robot/bimanual.py.
+  left: can0
+  right: can1
+
+# Applied to every enabled joint at enable time. Deliberately below the
+# firmware defaults in motor_configuration.json (torque_limit 0.8).
+gains:
+  position_kp: 0.7
+  position_kd: 0.03
+  torque_limit: 0.5
+
+safety:
+  # Commanded target cannot move faster than this, no matter what the
+  # trajectory asks for. A yanked goal becomes a ramp, not a step.
+  max_joint_speed: 1.0        # [rad/s]
+  # Consecutive missed PDO replies before the goal freezes in place.
+  link_flaky_cycles: 5
+  # ... and before the joint is auto-disabled and must be re-enabled by hand.
+  pdo_loss_threshold: 100
+  # Commands are clamped into the URDF limits shrunk by this margin, so a
+  # trajectory that grazes a limit cannot drive the joint into its hard stop.
+  limit_margin: 0.05          # [rad]
+  control_rate_hz: 100.0
+
+joints:
+  # --- left arm ------------------------------------------------------------
+  # Motors 1, 3 and 5 are the ones actually calibrated and bench-tested.
+  arm_left_shoulder_pitch_joint:
+    bus: left
+    device_id: 1
+    direction: -1
+    gear_ratio: 15.0
+    offset: 0.205758
+    enabled: true
+  arm_left_shoulder_roll_joint:
+    bus: left
+    device_id: 3
+    direction: -1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true
+  arm_left_shoulder_yaw_joint:
+    bus: left
+    device_id: 5
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true
+
+  # Elbow motors are not fitted yet. Listed so the mapping is visible, disabled
+  # so the bridge cannot command them.
+  arm_left_elbow_pitch_joint:
+    bus: left
+    device_id: 7
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+  arm_left_elbow_roll_joint:
+    bus: left
+    device_id: 9
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+
+  # --- right arm -----------------------------------------------------------
+  # No right-arm motor has been calibrated. All disabled.
+  arm_right_shoulder_pitch_joint:
+    bus: right
+    device_id: 2
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+  arm_right_shoulder_roll_joint:
+    bus: right
+    device_id: 4
+    direction: -1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+  arm_right_shoulder_yaw_joint:
+    bus: right
+    device_id: 6
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+  arm_right_elbow_pitch_joint:
+    bus: right
+    device_id: 8
+    direction: +1    # 2026-10-22 flipped from -1: confirmed on the real arm in drag teleop after the encoder fix
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+  arm_right_elbow_roll_joint:
+    bus: right
+    device_id: 10
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: false
+
+# ---------------------------------------------------------------------------
+# V1 wrist: Feetech SCS2332 / SCS15 serial servos (half-duplex TTL, 1 Mbaud),
+# not recoil CAN. The bridge drives them from the same node so a v1arm
+# trajectory (shoulder + elbow + wrist) lands on one action server.
+#
+# ==================== NOTHING HERE IS VERIFIED EITHER ======================
+# Servo IDs, ports, directions and centres are placeholders. Bring each joint up
+# the same way as the CAN joints: `enabled: false`, watch /joint_states while
+# turning the wrist by hand (torque is off), fix `direction`/`center_ticks`,
+# then enable and command a few degrees. Also confirm `range_deg` for the model
+# actually fitted: SCS15 is nominally 200 deg over 0..1023; if a commanded
+# 10 deg moves 15, the range is wrong. Servo travel is far wider than the URDF
+# limits (+/-30, +/-25, +/-20 deg) -- the URDF limits are what the bridge clamps to.
+# ============================================================================
+#
+# `ros2 run ... hardware_bridge.py --live --buses wrist` opens only these ports.
+wrist_servos:
+  bus:
+    right: {port: /dev/ttyUSB0, baud: 1000000}
+    left:  {port: /dev/ttyUSB1, baud: 1000000}
+  models:
+    SCS15:   {range_deg: 200.0, center_ticks: 512, speed_ticks: 0}
+    SCS2332: {range_deg: 200.0, center_ticks: 512, speed_ticks: 0}
+  # speed_ticks 0 = servo default; otherwise the bridge derives it from
+  # safety.max_joint_speed. The bridge slew-limits at 100 Hz regardless.
+  speed_scale: 1.0
+  joints:
+    arm_right_wrist_pitch_lower_joint:
+      bus: right
+      servo_id: 1
+      model: SCS2332
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_right_wrist_yaw_joint:
+      bus: right
+      servo_id: 2
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_right_wrist_pitch_upper_joint:
+      bus: right
+      servo_id: 3
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_pitch_lower_joint:
+      bus: left
+      servo_id: 1
+      model: SCS2332
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_yaw_joint:
+      bus: left
+      servo_id: 2
+      model: SCS15
+      # The left wrist is separately authored, not mirrored; its yaw axis
+      # already flips sign in the URDF, so start at +1 here too and verify.
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_pitch_upper_joint:
+      bus: left
+      servo_id: 3
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+
+# The hands are NOT handled by this bridge. dexhand_bringup's `dexhand_driver`
+# already exposes hand_controller/follow_joint_trajectory over its serial link
+# and uses the same R_<finger>_<Yaw|Pitch> joint names this URDF does, so MoveIt
+# talks to it directly -- see moveit_controllers_hardware.yaml.
+#
+# Its servo output starts disabled; turn it on deliberately with
+#   ros2 service call /dexhand_driver/enable std_srvs/srv/SetBool '{data: true}'

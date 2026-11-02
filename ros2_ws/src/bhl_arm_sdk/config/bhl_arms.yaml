@@ -1,0 +1,51 @@
+# BHL arm motor map for bhl_arm_sdk.
+#
+# Device ids, buses and directions are the ones verified on this lab's arms
+# (Berkeley-Humanoid-Lite ros2_ws hardware_joints_left_distal.yaml, 2026-10-22);
+# upstream Bimanual (Berkeley-Humanoid-Lite-Lowlevel@652777c) uses the same ids,
+# can0 = left (odd), can1 = right (even), but different signs for its own URDF.
+# Limits are the berkeley_humanoid_lite.urdf limits in degrees.
+#
+# Angles are degrees at the joint. Motor units = rotor radians here (firmware
+# gear ratio 1), so gear_ratio is the 15:1 gearbox:
+#   motor = motor_zero + direction * gear_ratio * joint_rad
+# zero: start -> the pose the arm is in at "enable" is 0 deg for every joint
+#                (upstream Bimanual does this); put the arm in its reference
+#                pose before enabling.
+# zero: config -> per-joint motor_zero [rotor rad] below.
+
+buses:
+  left: can0
+  right: can0        # one adapter for both arms on this bench; can1 with two adapters
+
+control:
+  zero: start
+  control_rate_hz: 50.0      # G1 example: control_dt 0.02 s
+  max_speed_deg: 30.0        # slew limit per joint [deg/s] (G1: 0.5 rad/s = 28.6)
+  reply_timeout: 0.004       # [s] PDO reply wait
+  heartbeat_period: 0.2      # [s] firmware watchdog is 1 s
+
+# Applied to every joint unless the joint overrides it. kp / kd / torque_limit
+# are the firmware position-loop gains in rotor units; 0.3 / 0.01 / 0.5 is
+# what the lab's hardware bridge runs (upstream Bimanual's 20 / 2 / 1 assumes
+# the firmware gear ratio set to the gearbox -- far too stiff here).
+defaults:
+  gear_ratio: 15.0
+  kp: 0.3
+  kd: 0.01
+  torque_limit: 0.5
+
+joints:
+  arm_left_shoulder_pitch_joint:  {bus: left,  device_id: 1,  direction: -1, lower_deg: -90.0, upper_deg: 45.0}
+  arm_left_shoulder_roll_joint:   {bus: left,  device_id: 3,  direction: -1, lower_deg: -15.0, upper_deg: 75.0,
+                                   kp: 1.0, kd: 0.01, torque_limit: 1.2}   # carries the arm
+  arm_left_shoulder_yaw_joint:    {bus: left,  device_id: 5,  direction: 1,  lower_deg: -45.0, upper_deg: 45.0}
+  arm_left_elbow_pitch_joint:     {bus: left,  device_id: 7,  direction: 1,  lower_deg: 0.0,   upper_deg: 90.0}
+  arm_left_elbow_roll_joint:      {bus: left,  device_id: 9,  direction: 1,  lower_deg: -45.0, upper_deg: 45.0}
+  arm_right_shoulder_pitch_joint: {bus: right, device_id: 2,  direction: 1,  lower_deg: -45.0, upper_deg: 90.0}
+  arm_right_shoulder_roll_joint:  {bus: right, device_id: 4,  direction: -1, lower_deg: -75.0, upper_deg: 15.0}
+  arm_right_shoulder_yaw_joint:   {bus: right, device_id: 6,  direction: 1,  lower_deg: -45.0, upper_deg: 45.0}
+  arm_right_elbow_pitch_joint:    {bus: right, device_id: 8,  direction: 1,  lower_deg: -90.0, upper_deg: 0.0,
+                                   kp: 0.8, kd: 0.01, torque_limit: 0.5,   # 2026-10-22 gain sweep
+                                  estop: range, range_margin_deg: 5.0}    # 2026-10-29 stop on leaving the limits, not on lag
+  arm_right_elbow_roll_joint:     {bus: right, device_id: 10, direction: 1,  lower_deg: -45.0, upper_deg: 45.0}

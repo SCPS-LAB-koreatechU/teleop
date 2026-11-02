@@ -1,0 +1,334 @@
+# Both arms, bench state (left as of 2026-09-23, right added 2026-09-29). Derived from hardware_joints.yaml;
+# pass with bridge_config:=<this file>.
+#
+# Only CAN 5 (shoulder yaw), 7 (elbow pitch) and 9 (elbow roll) are enabled --
+# each tracks a +-30 deg sine to about 1 deg and holds under 0.07 A.
+#
+# CAN 1 (shoulder pitch) is disabled: its encoder is dead. The raw count sat at
+# 15/4096 through 25 s of hand rotation, and calibration returns the same flux
+# offset for phase +1 and -1, i.e. it never runs. The drive still pushes 3.3 A
+# and 0.3 Nm into a rotor it cannot see, so enabling it only makes heat.
+#
+# CAN 3 (shoulder roll): the old "no usable torque" was a bad calibration plus
+# too little gain for the load. Fixed 2026-09-29 -- see its entry below.
+#
+# Also unresolved: moving the arm by hand throws CAN error frames (1755 in 20 s)
+# and has driven the bus to BUS-OFF, and node 3 has dropped off the bus entirely
+# after a hand move. Treat the left harness as suspect until that is chased down.
+#
+# Plan with the `left_distal` SRDF group (yaw + both elbow joints); `left_arm`
+# names all five joints and the bridge refuses any trajectory naming a disabled
+# one.
+#
+# Maps MoveIt joint names onto real actuators.
+#
+# ========================= NOTHING HERE IS VERIFIED =========================
+# `direction` and `offset` are transcribed from robot/bimanual.py, which
+# describes a *different* robot: its five joints per arm are named
+# shoulder_pitch/roll/yaw, elbow and wrist_yaw, and this URDF's are
+# shoulder_pitch/roll/yaw, elbow_pitch and elbow_roll. The CAN IDs line up by
+# position in the chain; the sign conventions have NOT been checked against
+# this URDF.
+#
+# UNITS (checked 2026-08-19 on the bench, motors 1/3/5): the recoil firmware
+# on these actuators has POSITION_CONTROLLER_GEAR_RATIO = 1.0, i.e. it reports
+# and accepts ROTOR radians, while the reference robot_configuration.backup.json
+# expects -15.0 for every arm joint. Rather than reflash, `gear_ratio: 15`
+# below converts in the bridge (sign folded into `direction`, so the reference
+# directions +1/+1/-1 become -1/-1/+1 for the left shoulder). If someone writes
+# -15 back into the firmware, set gear_ratio: 1 and flip direction back.
+#
+# ZEROING: encoders boot at an arbitrary value and position_offset is 0 in the
+# firmware, so `offset` here is what maps the real arm onto URDF zero. Pose the
+# arm at zero (URDF home), output disabled, then
+#   ros2 service call /hardware_bridge/zero std_srvs/srv/Trigger
+# and paste the printed offsets below. Redo after every power cycle unless the
+# firmware offsets are stored.
+#
+# Verify one joint at a time, powered, with the arm free to move and a hand on
+# the E-STOP:
+#   1. bring the joint up with `enabled: false` still set and watch /joint_states
+#      while you back-drive it by hand -- the sign tells you `direction`
+#   2. only then set `enabled: true` and command small moves
+# ============================================================================
+#
+# `enabled: false` means the bridge will read the joint if it answers but will
+# never command it. Joints absent from this file are neither read nor commanded;
+# the bridge reports them as unavailable and refuses trajectories touching them.
+#
+# The bridge only maps joints that exist in the running robot_description, so
+# with model:=stock or model:=dexhand the wrist entries below are simply
+# skipped; with model:=v1arm they are required for any arm trajectory.
+
+bus:
+  # Two CAN channels, one per arm, as in robot/bimanual.py.
+  left: can0
+  # Bench: one USB-CAN adapter, both arms daisy-chained on it (the bridge
+  # shares one socket when two keys name the same channel). On the robot: can1.
+  right: can0
+
+# Applied to every enabled joint at enable time. Deliberately below the
+# firmware defaults in motor_configuration.json (torque_limit 0.8).
+gains:
+  # 2026-09-29: kp 0.7 / kd 0.03 made 5 and 9 vibrate hard within a second of
+  # enabling. kp 0.3 / kd 0.01 are the values the bench step tests on these
+  # motors ran smoothly with. (kd is written to the firmware's velocity kp.)
+  position_kp: 0.3
+  position_kd: 0.01
+  torque_limit: 0.5
+
+safety:
+  # Commanded target cannot move faster than this, no matter what the
+  # trajectory asks for. A yanked goal becomes a ramp, not a step.
+  max_joint_speed: 1.0        # [rad/s]
+  # Consecutive missed PDO replies before the goal freezes in place.
+  link_flaky_cycles: 5
+  # ... and before the joint is auto-disabled and must be re-enabled by hand.
+  pdo_loss_threshold: 100
+  # Commands are clamped into the URDF limits shrunk by this margin, so a
+  # trajectory that grazes a limit cannot drive the joint into its hard stop.
+  limit_margin: 0.05          # [rad]
+  control_rate_hz: 100.0
+
+joints:
+  # --- left arm ------------------------------------------------------------
+  # Motors 1, 3 and 5 are the ones actually calibrated and bench-tested.
+  arm_left_shoulder_pitch_joint:
+    bus: left
+    device_id: 1
+    direction: -1
+    gear_ratio: 15.0
+    offset: 0.0001
+    enabled: true    # CAN 1: enabled 2026-10-02 at the user's call. TWO THINGS ARE STILL WRONG.
+                     # (1) phase_order is +1 while every other motor here is -1, and its
+                     # flux_offset is -43.66 -- the signature of a calibration run at the wrong
+                     # sign (compare motor 3, where +1 calibrated 37x worse than -1). Commanding
+                     # it on a mismatched order/offset pair is how CAN 8 and CAN 10 ran away.
+                     # Fix with recalibrate.py --id 1 --po -1 before trusting any motion.
+                     # (2) its power stage reads 0.0 V while 3/5/7/9 read ~25 V on the same bus,
+                     # so it cannot make torque yet and cannot be calibrated either (the firmware
+                     # busy-waits below 9 V). That is a wiring/power problem, not a software one.
+                     # Correction to an earlier note here: the config is NOT zeroed. Read straight
+                     # from flash over SWD it is near-intact -- device_id 1, gear_ratio 1.0,
+                     # i_limit 20.0, pole_pairs 14, torque_constant 0.08958, cal current 5.0.
+                     # The all-zero reading that claim rested on came from the CAN parameter-read
+                     # desync (see recoil/core.py _read_parameter), not from the motor.
+  arm_left_shoulder_roll_joint:
+    bus: left
+    device_id: 3
+    direction: -1
+    gear_ratio: 15.0
+    offset: 0.0265
+    enabled: true    # 2026-10-07: encoder replaced; the 0..+8 deg operator window in
+                     # ~/.config/bhl/operator_limits.yaml was removed, URDF limits apply
+    # 2026-10-02: the user re-seated the encoder magnet, which fixed the torque
+    # reversal: table max error went 127 deg -> 45/49 deg (electrical), i.e. under
+    # the 90 deg point where torque flips. phase order -1 is now settled by
+    # measurement, not guesswork: +1 calibrates to a 4736 deg table error, ~37x
+    # worse. Still not accepted, because two runs at -1 disagreed by 22 deg
+    # (limit 8): suspected gravity load, since this joint lifts 5/7/9. So cal
+    # current was raised 4.0 -> 6.0 A to pull through the load (i_limit here is
+    # only 3.71 A; calibration drives open-loop voltage so it is not clamped by
+    # it, but keep the difference in mind). Flash persistence of that 6.0 A is
+    # NOT yet confirmed across a power cycle.
+    # 2026-09-29: recalibrated (phase order -1, flux offset 53.22, cal current
+    # 3.0 A, stored to flash). It lifts the whole distal arm (5/7/9 hang on
+    # it): kp 0.3 made 0.18 Nm at 0.6 rad error and could not lift it; kp 0.8
+    # / torque 1.2 tracked a +6 deg step 100% and came back within 0.15 deg.
+    # But a +15 deg (225 deg rotor) lift at the same gains followed to ~+12.4
+    # deg, then went backwards fast (abort at -1.6 rad rotor).
+    # CAUSE: the encoder is nonlinear -- -12..+3 deg mechanical over a rotor turn
+    # (218 deg electrical p-p). Wherever the error passes 90 deg electrical the
+    # torque reverses, and that zone comes round every rotor turn = every ~24
+    # deg of joint. Only a window of a few degrees is safe until the magnet or
+    # sensor alignment is fixed.
+    # 2026-10-07 encoder REPLACED (new flux offset 67.916, table max 25 deg).
+    # Gain sweep on the new encoder (16 combos, +10 deg steps under load): hold
+    # jitter dropped from 6-9 to 0.1-3 mdeg (old encoder noise), kd 0.010-0.012
+    # gave the least vibration while moving, kp 1.1 got worse. 1.0 / 0.010 best.
+    # kd range at kp 1.0 (2 runs each): <= 0.006 under-damped while moving,
+    # 0.014 starts to degrade, 0.016 = vibration onset (hold jitter x10-50),
+    # 0.018-0.030 vibrates hard, 0.025+ can go unstable. Keep kd 0.008-0.012.
+    # Old-encoder sweep for reference: kd 0 always unstable, kd >= 0.02 vibrated.
+    gains:
+      position_kp: 1.0
+      position_kd: 0.010
+      torque_limit: 1.2
+  arm_left_shoulder_yaw_joint:
+    bus: left
+    device_id: 5
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.1004
+    enabled: true
+
+  # Elbow motors are not fitted yet. Listed so the mapping is visible, disabled
+  # so the bridge cannot command them.
+  arm_left_elbow_pitch_joint:
+    bus: left
+    device_id: 7
+    direction: +1
+    gear_ratio: 15.0
+    offset: -0.1418
+    enabled: true
+  arm_left_elbow_roll_joint:
+    bus: left
+    device_id: 9
+    direction: +1
+    gear_ratio: 15.0
+    offset: -0.0734
+    enabled: true
+
+  # --- right arm -----------------------------------------------------------
+  # No right-arm motor has been calibrated. All disabled.
+  arm_right_shoulder_pitch_joint:
+    bus: right
+    device_id: 2
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true    # CAN 2 (6512): po -1 fo 45.25, step tests 88-97% at kp 0.3 / torque 0.5
+  arm_right_shoulder_roll_joint:
+    bus: right
+    device_id: 4
+    direction: -1    # flipped back 2026-10-02 at the user's call. Was +1 since 2026-09-29, when they
+                     # saw 4 turn the wrong way in the GUI -- so this sign has now been tried both ways.
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true    # CAN 4 (5010): po -1 fo 61.23, step tests 88-97%; turns opposite to 2 for the same user direction
+  arm_right_shoulder_yaw_joint:
+    bus: right
+    device_id: 6
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true    # CAN 6: enabled 2026-10-13 at the user's call. Was disabled: encoder did not see the rotor (magnet off/slipping)
+  arm_right_elbow_pitch_joint:
+    bus: right
+    device_id: 8
+    direction: +1    # 2026-10-22 flipped from -1: the user saw the travel range reversed on the first run after the encoder fix
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true    # CAN 8: enabled 2026-10-22 at the user's call, calibration kept as is (po -1, flux 83.247; encoder 1st-harmonic
+                     # error 14 deg mech after the magnet/board rework, max commutation error 217 deg -> torque can reverse in places).
+                     # Earlier: re-disabled 2026-10-13 -- shook as soon as torque came on. Re-enabled earlier 2026-10-13; re-disabled 2026-10-02 (was re-enabled earlier the same
+                     # day when they reported the magnet centred).
+                     # Same day recalibrate.py measured: po -1 correct (+1 read 4966 deg = encoder
+                     # follows the rotor), but a 356 deg (electrical) peak error over one rotor turn
+                     # with po -1, i.e. past 90 deg = torque reverses somewhere. Calibration result
+                     # was NOT kept; stored po -1 / flux 44.940 is the earlier one. Watch it closely.
+    # Before 2026-10-02: re-disabled -- torque reverses in part of its travel (see below)
+    # The encoder magnet was loose (open-loop sweeps read -21 / -159 deg with the
+    # elbow still). The user re-glued it; recalibrated: po -1 fo 44.94 (repeats;
+    # po +1 gives -45.08, now clearly different), stored to flash. Torque probe
+    # moves it both ways at 0.04-0.06 Nm; hold 0.04 deg; +3 deg step 97%. The -3
+    # deg step stops at ~1.8 deg: the elbow's mechanical end (fully straight).
+    # BUT: at enable with 2 also live the whole arm shook; hold 2+8 -> 8 ran away
+    # +1.08 rad rotor, while 8 alone holds fine at the new spot. Torque reverses
+    # in part of the rotor turn = the re-glued magnet is off-centre (open-loop
+    # sweeps gave -97/-70/-100/-150 deg for the same 4 turns). Re-centre it.
+    # 2026-10-22 gain sweep (LUT firmware 0x20261015, flux 44.918, torque_limit 0.5,
+    # 2.5 s holds): kd 0 was quiet every time (kp 0.1-0.5, 9/9, 0.6-1.8 mrad rotor
+    # jitter); any kd > 0 vibrated almost always (the global kp 0.3 / kd 0.01: 0/3).
+    # The encoder still reads unevenly, so the velocity estimate jumps and kd
+    # amplifies it. kd 0 only fixes the hold: +-3 deg moves still catch at some
+    # angles (2.9 deg joint error, safety stop), so drag it gently.
+    # 2026-10-22 FIXED: magnet re-centred on the shaft (AS5600 STATUS ok, AGC 120,
+    # field 2054-2137 over a turn, 1st-harmonic error 0.5 deg mech). Recalibrated:
+    # po -1, flux 78.228, table max 6.5 deg elec. Moving sweep (16 combos, +-5 deg
+    # at 0.3 rad/s rotor, torque_limit 0.5): least vibration kp 0.8 / kd 0.010
+    # (3.5 mrad rotor, tracking max 0.22 deg joint). kd 0.003 vibrates more,
+    # kp 1.0 / kd 0.003 went unstable, kd 0.015 worse at kp >= 0.8.
+    gains:
+      position_kp: 0.8
+      position_kd: 0.010
+      torque_limit: 0.5
+  arm_right_elbow_roll_joint:
+    bus: right
+    device_id: 10
+    direction: +1
+    gear_ratio: 15.0
+    offset: 0.0
+    enabled: true    # CAN 10: re-enabled 2026-10-02 at the user's call.
+                     # Previously disabled because fo drifts between calibrations and it ran away the
+                     # wrong way -- untrusted, so watch it and keep a hand on the E-STOP.
+
+# ---------------------------------------------------------------------------
+# V1 wrist: Feetech SCS2332 / SCS15 serial servos (half-duplex TTL, 1 Mbaud),
+# not recoil CAN. The bridge drives them from the same node so a v1arm
+# trajectory (shoulder + elbow + wrist) lands on one action server.
+#
+# ==================== NOTHING HERE IS VERIFIED EITHER ======================
+# Servo IDs, ports, directions and centres are placeholders. Bring each joint up
+# the same way as the CAN joints: `enabled: false`, watch /joint_states while
+# turning the wrist by hand (torque is off), fix `direction`/`center_ticks`,
+# then enable and command a few degrees. Also confirm `range_deg` for the model
+# actually fitted: SCS15 is nominally 200 deg over 0..1023; if a commanded
+# 10 deg moves 15, the range is wrong. Servo travel is far wider than the URDF
+# limits (+/-30, +/-25, +/-20 deg) -- the URDF limits are what the bridge clamps to.
+# ============================================================================
+#
+# `ros2 run ... hardware_bridge.py --live --buses wrist` opens only these ports.
+wrist_servos:
+  bus:
+    right: {port: /dev/ttyUSB0, baud: 1000000}
+    left:  {port: /dev/ttyUSB1, baud: 1000000}
+  models:
+    SCS15:   {range_deg: 200.0, center_ticks: 512, speed_ticks: 0}
+    SCS2332: {range_deg: 200.0, center_ticks: 512, speed_ticks: 0}
+  # speed_ticks 0 = servo default; otherwise the bridge derives it from
+  # safety.max_joint_speed. The bridge slew-limits at 100 Hz regardless.
+  speed_scale: 1.0
+  joints:
+    arm_right_wrist_pitch_lower_joint:
+      bus: right
+      servo_id: 1
+      model: SCS2332
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_right_wrist_yaw_joint:
+      bus: right
+      servo_id: 2
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_right_wrist_pitch_upper_joint:
+      bus: right
+      servo_id: 3
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_pitch_lower_joint:
+      bus: left
+      servo_id: 1
+      model: SCS2332
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_yaw_joint:
+      bus: left
+      servo_id: 2
+      model: SCS15
+      # The left wrist is separately authored, not mirrored; its yaw axis
+      # already flips sign in the URDF, so start at +1 here too and verify.
+      direction: +1
+      offset: 0.0
+      enabled: false
+    arm_left_wrist_pitch_upper_joint:
+      bus: left
+      servo_id: 3
+      model: SCS15
+      direction: +1
+      offset: 0.0
+      enabled: false
+
+# The hands are NOT handled by this bridge. dexhand_bringup's `dexhand_driver`
+# already exposes hand_controller/follow_joint_trajectory over its serial link
+# and uses the same R_<finger>_<Yaw|Pitch> joint names this URDF does, so MoveIt
+# talks to it directly -- see moveit_controllers_hardware.yaml.
+#
+# Its servo output starts disabled; turn it on deliberately with
+#   ros2 service call /dexhand_driver/enable std_srvs/srv/SetBool '{data: true}'
