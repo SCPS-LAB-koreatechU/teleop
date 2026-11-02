@@ -1,0 +1,32 @@
+# onboard:=true -- trajectories go to bhl_commander on the robot's RDK X5
+# (~/bhl_onboard_ws). Same controller name and joints as the hardware file, so
+# planning groups are unchanged. Hands are driven through /bhl/hand_preset or
+# /hand/<side>/cmd on the board, not through MoveIt, until their joints are mapped.
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - arms_controller
+
+  arms_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - arm_left_shoulder_pitch_joint
+      - arm_left_shoulder_roll_joint
+      - arm_left_shoulder_yaw_joint
+      - arm_left_elbow_pitch_joint
+      - arm_left_elbow_roll_joint
+      - arm_right_shoulder_pitch_joint
+      - arm_right_shoulder_roll_joint
+      - arm_right_shoulder_yaw_joint
+      - arm_right_elbow_pitch_joint
+      - arm_right_elbow_roll_joint
+      - arm_left_wrist_pitch_lower_joint
+      - arm_left_wrist_yaw_joint
+      - arm_left_wrist_pitch_upper_joint
+      - arm_right_wrist_pitch_lower_joint
+      - arm_right_wrist_yaw_joint
+      - arm_right_wrist_pitch_upper_joint
+

@@ -1,0 +1,18 @@
+# colcon
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# fetched by ros2_ws/fetch_vendor.sh
+ros2_ws/vendor/
+source/berkeley_humanoid_lite_assets/
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# editor / backups
+*.bak
+*.swp

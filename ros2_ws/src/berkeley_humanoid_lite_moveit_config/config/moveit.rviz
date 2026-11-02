@@ -1,0 +1,81 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /MotionPlanning1
+      Splitter Ratio: 0.5
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Cell Size: 0.25
+      Plane Cell Count: 20
+      Value: true
+    - Class: moveit_rviz_plugin/MotionPlanning
+      Enabled: true
+      Name: MotionPlanning
+      Move Group Namespace: ""
+      Robot Description: robot_description
+      Planning Scene Topic: /monitored_planning_scene
+      Planning Request:
+        Planning Group: left_distal
+        Interactive Marker Size: 0.15
+        Query Start State: true
+        Query Goal State: true
+        Show Workspace: false
+        Colliding Link Color: 255; 0; 0
+        Goal State Color: 250; 128; 0
+      Planning Metrics:
+        Show Joint Torques: false
+        Show Weight Limit: false
+      Planned Path:
+        Trajectory Topic: /display_planned_path
+        Loop Animation: false
+        Show Robot Collision: false
+        Show Robot Visual: true
+        Show Trail: false
+        State Display Time: 0.05 s
+        Interrupt Display: false
+      Scene Geometry:
+        Scene Alpha: 0.9
+        Show Scene Geometry: true
+      Scene Robot:
+        Show Robot Collision: false
+        Show Robot Visual: true
+        Robot Alpha: 1
+      Value: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.4
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.45
+      Pitch: 0.35
+      Yaw: 0.9
+      Name: Current View
+      Target Frame: world
+    Saved: ~
+Window Geometry:
+  Height: 1000
+  Width: 1600
+  Displays:
+    collapsed: false
+  MotionPlanning:
+    collapsed: false

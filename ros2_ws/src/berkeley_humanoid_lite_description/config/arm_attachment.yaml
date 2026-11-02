@@ -1,0 +1,230 @@
+# How the DexHand V1 forearm attaches to each arm, and what happens downstream.
+#
+# The wrist is no longer guesswork. `generate_urdf.py` reads the real joint
+# origins, axes and travel limits straight out of the V1 description in
+# vendor/dexhand_v1_description, so the chain below is whatever upstream says:
+#
+#   forearm  --wrist_pitch_lower-->  wrist_lower
+#            --wrist_yaw---------->  wrist_upper
+#            --wrist_pitch_upper-->  hand
+#
+# Right side, for reference (metres, radians; the left side differs slightly and
+# is read from its own file rather than mirrored):
+#
+#   wrist_pitch_lower  xyz (-0.012,   -0.0217, 0.203)     axis (0, -1, 0)  +/- 30.0 deg
+#   wrist_yaw          xyz (-0.01198,  0.021,  0.029)     axis (-1, 0, 0)  +/- 25.0 deg
+#   wrist_pitch_upper  xyz ( 0.012,    0.021,  0.023266)  axis (0, -1, 0)  +/- 20.0 deg
+#
+# Three parts, three joints: Forearm, Wrist_joint (lower + upper halves), Hand.
+# There is no axial rotation joint -- the V1 README lists that servo as optional
+# and the upstream URDF does not model it.
+
+# The legs are not part of this build: nothing plans them, no motor drives them,
+# and they only ever contributed collision geometry and mass. Set true to put
+# them back -- the whole chain (URDF, collision matrix, SRDF) regenerates from
+# this one flag.
+#
+# With legs off the torso simply floats: `world` welds to `base` at the origin
+# and the base mesh sits ~0.675 m up, exactly where it was before. Nothing moves,
+# the legs just stop being drawn.
+include_legs: false
+
+# ======================== DESIGNED, NOT YET BUILT ========================
+# The mount is no longer a guess: an adapter part now exists
+# (meshes_adapter/bhl_v1_forearm_adapter.stl, printable STL in mm) and the
+# transform below is read off its design.  Measured from the repo's own
+# meshes (2026-08-25):
+#
+#   elbow_roll output:  D10.0 x 10 mm hub proud of the flange plane, and the
+#                       stock hand's 6 x D3.4 bolt pattern on a D36.0 circle
+#                       (angles 30 + 60k deg) centred on the roll axis
+#   V1 forearm cuff:    annular ring OD 84.0 / ID 70.0, face at link z = 0
+#
+# The adapter stacks: 8 mm base plate (stock bolt pattern, D10.6 hub bore),
+# 4 mm end-stop floor at D84, then a 12 mm collar at OD 69.2 that slides
+# into the cuff.  The shell face therefore seats 12 mm off the flange plane:
+# that is mount.xyz's z.  Roll is fixed by bolt clocking; the 60-degree
+# pattern lets the whole hand re-clock in 60-degree steps at assembly, and
+# the radial screws allow any angle, so build it at zero.
+#
+# After assembling the real arm, verify with the tuning model as before:
+#
+#   python3 generate_urdf.py
+#   ros2 launch berkeley_humanoid_lite_description display.launch.py model:=tuning
+#   ros2 run berkeley_humanoid_lite_description read_mount.py --watch
+#
+# Slider values are the URDF origin directly -- paste them back over mount.right.
+# =========================================================================
+# 2026-10-26: the adapter actually built is a different part, the D72 plate
+# (meshes_adapter/bhl_v1_forearm_adapter_d72.stl, from the user's
+# "결합부_2ea 1.STL", recentred on the roll axis).  Read off its mesh:
+#   D43 x 1.85 mm boss on the flange face, D15.6 bore for the hub, then a
+#   D72 disc to z 10.35; 6 x D3.4 holes on a D36.4 circle at 30 + 60k deg
+#   (the stock elbow_roll pattern) counterbored D6 from the far face; a
+#   2.5 mm wide, 5 mm deep groove round the rim at z 5.1-7.6 for the radial
+#   screws.
+# The disc is captured inside the V1 forearm cuff, not under it: the cuff
+# mesh has a D72 pocket from forearm z 3.5 to 12.5 (9.0 mm) behind a D68 lip
+# (forearm z 0-3.5).  The 8.5 mm disc (adapter z 1.85-10.35) centred in that
+# pocket puts the flange plane (adapter z 0) at forearm z +1.9, i.e. the
+# forearm face sits 1.9 mm BEHIND the flange: mount z = -0.0019.  The pocket
+# leaves 0.5 mm of play, so the true value is -1.65 .. -2.15 mm until it is
+# measured on the arm (tuning model, as below).
+# The old 24 mm adapter (bhl_v1_forearm_adapter.stl) put the face at +12 mm.
+mount:
+  right:
+    xyz: [0.0, 0.0, -0.0019]
+    rpy: [0.0, 0.0, 0.0]
+  # `mirror` derives the left mount from the right by negating y and the
+  # roll/yaw components. Replace with explicit xyz/rpy if the sides differ.
+  left: mirror
+
+  # The printed part between the elbow_roll flange and the V1 forearm cuff.
+  # Mesh is authored in mm in the elbow_roll frame; generate_urdf.py hangs it
+  # on the arm_*_mount link with the inverse mount transform, so re-tuning the
+  # mount moves the forearm, never the printed part.  The part is mirror
+  # symmetric across xz, so both sides share one STL.  Mass is the solid-PLA
+  # volume (41 cm3) at 1240 kg/m3 -- weigh the finished print and correct.
+  # D72 plate (2026-10-26): solid-PLA volume 36.0 cm3 at 1240 kg/m3, computed
+  # from the mesh the same way as the old part's values (which it reproduces).
+  # Old 24 mm part: bhl_v1_forearm_adapter.stl, mass 0.0508, com z 0.01069,
+  # inertia [2.22437e-05, 2.22437e-05, 4.11132e-05, 0, 0, 0].
+  adapter:
+    mesh: package://berkeley_humanoid_lite_description/meshes_adapter/bhl_v1_forearm_adapter_d72.stl
+    scale: 0.001
+    mass: 0.0447
+    com: [0.0, 0.0, 0.005702]         # [m], elbow_roll frame
+    inertia: [1.42718e-05, 1.43386e-05, 2.79499e-05, 0.0, 0.0, 0.0]
+    # [ixx, iyy, izz, ixy, ixz, iyz] kg m2, about the com, elbow_roll axes
+
+wrist:
+  # false welds the hand straight to the mount (the DexHand V2 arrangement).
+  enabled: true
+
+  # Which joints to take from the V1 URDF, in order. Dropping a name welds that
+  # joint at zero, so ["wrist_pitch_lower", "wrist_yaw"] gives a 2-DOF wrist if
+  # you build it with fewer servos.
+  joints:
+    - wrist_pitch_lower
+    - wrist_yaw
+    - wrist_pitch_upper
+
+  # Upstream inertials are Fusion 360 defaults at steel density (~7850 kg/m3),
+  # which overstates a printed forearm by roughly 6.3x. Masses and inertia
+  # tensors are rescaled by this / 7850.
+  #
+  # 1240 is solid PLA. Real parts are 25-30% infill so the true structure is
+  # lighter still -- but the servos, battery and electronics inside the forearm
+  # are not modelled at all, and they roughly cancel it. Neither number is
+  # measured; weigh the finished assembly if it matters.
+  structure_density_kgm3: 1240.0
+
+# Wrist -> DexHand V2 hand base (`base_link`).
+#
+# V1's own wrist_pitch_upper drives `index_bulk_1`, the first link of the V1
+# hand. Here the V2 hand takes that place, so this transform is the V1-wrist to
+# V2-hand mechanical interface -- a part that does not exist yet. Identity until
+# it is designed.
+hand_interface:
+  xyz: [0.0, 0.0, 0.0]
+  rpy: [0.0, 0.0, 0.0]
+
+# ======================= Which DexHand this build is =======================
+# The vendored description is the full V2 hand: 16 independently actuated
+# joints plus 5 that mimic. This build is the 8-servo variant, and until now
+# that variant was a URDF sitting on one developer's laptop
+# (dexhand_moveit_ws/.../dexhandv2_right_8servo.urdf), which meant regenerating
+# on any other machine silently produced a different robot. It is described
+# here instead so the generated URDFs are reproducible from a fresh clone.
+#
+# Three kinds of joint:
+#
+#   actuated  a servo drives it
+#   coupled   no servo; a linkage ties it to another joint, emitted as <mimic>
+#   frozen    no servo and no linkage; welded at the angle given
+#
+# ---------------------------------------------------------------------------
+# THE COUPLING RATIOS ARE NOT MEASURED. They say a finger curls proportionally
+# along its length, which is the right *shape* for a linkage-driven finger and
+# the wrong precision. Measure them before trusting fingertip positions:
+# command each knuckle across its travel with the hand held still, capture the
+# fingertip, and fit -- scripts/motion/fit_finger_coupling.py does the fit.
+#
+# For scale, WIRobotics' ALLEX publishes measured couplings for a comparable
+# anthropomorphic finger: DIP follows PIP at 0.656 and the thumb IP follows its
+# MCP at 0.732, both least-squares linear fits through the origin of a quartic.
+# Ratios near 1 here are placeholders, not agreement with that.
+# ---------------------------------------------------------------------------
+hand:
+  # Which palm the digits are bolted to.
+  #
+  #   v1  the DexHand V1 palm: four bulk pieces bolted in a row plus a cover
+  #       plate, with a digit on each. This build's palm. The third wrist joint
+  #       drives it directly, as upstream intends.
+  #   v2  the DexHand V2 palm: one printed part carrying all five digits, welded
+  #       to the wrist through an interface part that does not exist yet.
+  #
+  # Only the digits are V2 here -- "DexHand V1 with the fingers swapped for V2"
+  # is a V1 forearm, wrist and palm carrying V2 digit assemblies.
+  palm: v1
+
+  # The bracket between a V1 bulk and a V2 digit. NOT MEASURED, and identity is
+  # a claim: that a V2 digit bolts exactly where V1's did. For the four fingers
+  # that is nearly true -- referred to a common frame the mounts agree to within
+  # 2 to 3 mm -- but V2 moved the thumb, and referred the same way it is 15 mm
+  # from where V1 put it. Whichever adapter was printed to carry it belongs
+  # here; until then the thumb is 15 mm out of place.
+  digit_adapter:
+    Thumb: {xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+
+  fingers: [Index, Middle, Ring, Pinky]
+
+  # Servo travel, tighter than the upstream description's (which is the
+  # mechanism's range, not the 8-servo build's): pitch 0.95 vs 1.309 rad,
+  # yaw 0.30 vs 0.349.
+  actuated:
+    Pitch: {lower: 0.0, upper: 0.95}
+    Yaw: {lower: -0.30, upper: 0.30}
+
+  # The curl. Driving the knuckle carries the middle phalanx with it, and that
+  # carries the tip. Without these the fingers are rigid 75 mm links and no
+  # amount of retargeting can make them close.
+  #
+  # Upstream already declares DIP <- Flexor, but its <mimic> names the driver
+  # `Index_Flexor` where the joint is `R_Index_Flexor`, so every one of those
+  # tags refers to a joint that does not exist. Re-emitted here with the names
+  # the model actually uses.
+  coupled:
+    Flexor: {driver: Pitch, multiplier: 1.0}
+    DIP: {driver: Flexor, multiplier: 1.0}
+
+  # No servo reaches the thumb, so its posture is decided when the hand is
+  # assembled and the URDF should say which posture that is. Joint zero is the
+  # fully extended, splayed pose: it puts the thumb tip 85 mm from the nearest
+  # point any fingertip can reach, so nothing the hand does can oppose it.
+  #
+  # scripts/motion/analyze_hand.py searches for the posture that closes that gap
+  # as far as the mechanism allows. Set these to the angles the thumb is
+  # actually built at -- the generator welds the joint with the rotation baked
+  # into its origin, so a non-zero angle here moves the thumb.
+  # Fingertip frames. The hand description has no frame at the working point of
+  # a finger -- `Index_Tip_1` is the tip *link*, whose origin is at its base --
+  # so retargeting and IK have nothing to aim at. These add one per finger at
+  # the pad. Offset is in the tip link's frame, measured from the mesh.
+  #
+  # These also used to arrive from the off-repo 8-servo URDF, which is why a
+  # regeneration elsewhere produced a hand nothing could target.
+  tip_frames:
+    offset: [-0.0011, -0.00309, 0.0179]
+    parents:
+      Index: Index_Tip_1
+      Middle: Midle_Tip_1        # upstream's spelling, not a typo here
+      Ring: Ring_Tip_1
+      Pinky: Pinky_Tip_1
+
+  thumb:
+    R_Thumb_Yaw: 0.0
+    R_Thumb_Roll: 0.0
+    R_Thumb_Pitch: 0.0
+    R_Thumb_Flexor: 0.0
+    R_Thumb_DIP: 0.0

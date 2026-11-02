@@ -1,0 +1,55 @@
+# Arm caps as in joint_limits.yaml, plus the DexHand V1 wrist and both hands.
+#
+# The wrist joints are Feetech SCS2332 serial servos and are capped slower
+# than the fingers because they carry the whole hand. Their *travel* limits
+# are not here -- those come from the V1 URDF and are tight: +/-30 deg on the
+# lower pitch, +/-25 on the yaw, +/-20 on the upper pitch.
+
+default_velocity_scaling_factor: 0.5
+default_acceleration_scaling_factor: 0.5
+
+joint_limits:
+  arm_left_shoulder_pitch_joint: &arm_limits
+    has_velocity_limits: true
+    max_velocity: 2.0
+    has_acceleration_limits: true
+    max_acceleration: 4.0
+  arm_left_shoulder_roll_joint: *arm_limits
+  arm_left_shoulder_yaw_joint: *arm_limits
+  arm_left_elbow_pitch_joint: *arm_limits
+  arm_left_elbow_roll_joint: *arm_limits
+  arm_right_shoulder_pitch_joint: *arm_limits
+  arm_right_shoulder_roll_joint: *arm_limits
+  arm_right_shoulder_yaw_joint: *arm_limits
+  arm_right_elbow_pitch_joint: *arm_limits
+  arm_right_elbow_roll_joint: *arm_limits
+  arm_left_wrist_pitch_lower_joint: &wrist_limits
+    has_velocity_limits: true
+    max_velocity: 1.5
+    has_acceleration_limits: true
+    max_acceleration: 3.0
+  arm_left_wrist_yaw_joint: *wrist_limits
+  arm_left_wrist_pitch_upper_joint: *wrist_limits
+  arm_right_wrist_pitch_lower_joint: *wrist_limits
+  arm_right_wrist_yaw_joint: *wrist_limits
+  arm_right_wrist_pitch_upper_joint: *wrist_limits
+  R_Index_Pitch: &finger_limits
+    has_velocity_limits: true
+    max_velocity: 3.0
+    has_acceleration_limits: true
+    max_acceleration: 10.0
+  R_Middle_Pitch: *finger_limits
+  R_Ring_Pitch: *finger_limits
+  R_Pinky_Pitch: *finger_limits
+  R_Index_Yaw: *finger_limits
+  R_Middle_Yaw: *finger_limits
+  R_Ring_Yaw: *finger_limits
+  R_Pinky_Yaw: *finger_limits
+  L_Index_Pitch: *finger_limits
+  L_Middle_Pitch: *finger_limits
+  L_Ring_Pitch: *finger_limits
+  L_Pinky_Pitch: *finger_limits
+  L_Index_Yaw: *finger_limits
+  L_Middle_Yaw: *finger_limits
+  L_Ring_Yaw: *finger_limits
+  L_Pinky_Yaw: *finger_limits

@@ -1,0 +1,30 @@
+# ros2_control is not installed on this machine, so execution goes through
+# moveit_simple_controller_manager (which is) to a plain FollowJointTrajectory
+# action server. In this configuration that server is scripts/sim_trajectory_server.py,
+# which just replays the trajectory onto /joint_states.
+#
+# One controller covers all ten arm joints; MoveIt is happy to use a controller
+# whose joint set is a superset of the group being executed, so left_arm,
+# right_arm and both_arms all route here.
+
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - arms_controller
+
+  arms_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - arm_left_shoulder_pitch_joint
+      - arm_left_shoulder_roll_joint
+      - arm_left_shoulder_yaw_joint
+      - arm_left_elbow_pitch_joint
+      - arm_left_elbow_roll_joint
+      - arm_right_shoulder_pitch_joint
+      - arm_right_shoulder_roll_joint
+      - arm_right_shoulder_yaw_joint
+      - arm_right_elbow_pitch_joint
+      - arm_right_elbow_roll_joint

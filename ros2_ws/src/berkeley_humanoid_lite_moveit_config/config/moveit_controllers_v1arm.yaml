@@ -1,0 +1,64 @@
+# Controllers for the v1arm model. See moveit_controllers.yaml for why this
+# goes through moveit_simple_controller_manager instead of ros2_control.
+#
+# Three controllers, mirroring how the hardware splits: arm and wrist joints
+# on their own buses, and one serial link per DexHand. In simulation all
+# three are served by scripts/sim_trajectory_server.py.
+
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - arms_controller
+    - right_hand_controller
+    - left_hand_controller
+
+  arms_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - arm_left_shoulder_pitch_joint
+      - arm_left_shoulder_roll_joint
+      - arm_left_shoulder_yaw_joint
+      - arm_left_elbow_pitch_joint
+      - arm_left_elbow_roll_joint
+      - arm_right_shoulder_pitch_joint
+      - arm_right_shoulder_roll_joint
+      - arm_right_shoulder_yaw_joint
+      - arm_right_elbow_pitch_joint
+      - arm_right_elbow_roll_joint
+      - arm_left_wrist_pitch_lower_joint
+      - arm_left_wrist_yaw_joint
+      - arm_left_wrist_pitch_upper_joint
+      - arm_right_wrist_pitch_lower_joint
+      - arm_right_wrist_yaw_joint
+      - arm_right_wrist_pitch_upper_joint
+
+  right_hand_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - R_Index_Pitch
+      - R_Middle_Pitch
+      - R_Ring_Pitch
+      - R_Pinky_Pitch
+      - R_Index_Yaw
+      - R_Middle_Yaw
+      - R_Ring_Yaw
+      - R_Pinky_Yaw
+
+  left_hand_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - L_Index_Pitch
+      - L_Middle_Pitch
+      - L_Ring_Pitch
+      - L_Pinky_Pitch
+      - L_Index_Yaw
+      - L_Middle_Yaw
+      - L_Ring_Yaw
+      - L_Pinky_Yaw

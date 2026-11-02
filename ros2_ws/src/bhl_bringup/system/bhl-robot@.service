@@ -1,0 +1,31 @@
+# Start the on-board bring-up at boot, as the user whose home holds
+# ~/humanoid_sdk (the instance name after the @):
+#
+#   sudo cp bhl-robot@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bhl-robot@sunrise      # user "sunrise"
+#   journalctl -fu bhl-robot@sunrise
+#
+# Opt-in. It starts in LIVE mode (dry_run:=false) but arm_controller comes up
+# with its output off, so nothing moves until /arm_controller/enable is called.
+# SIGINT, not SIGTERM, so `ros2 launch` shuts the nodes down in order and the
+# motors are put in IDLE before the process exits (see TimeoutStopSec).
+
+[Unit]
+Description=Berkeley Humanoid Lite upper-body bring-up (bhl_bringup robot.launch.py)
+After=network-online.target systemd-networkd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i
+Environment=BHL_ROS_DOMAIN_ID=92
+ExecStart=/bin/bash -lc 'source /home/%i/humanoid_sdk/env.sh && exec ros2 launch bhl_bringup robot.launch.py dry_run:=false'
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
